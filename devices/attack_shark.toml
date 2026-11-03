@@ -1,0 +1,41 @@
+schema = 1
+id = "attack-shark"
+name = "Attack Shark (experimental)"
+vendor = "Attack Shark"
+kind = "mouse"
+connection = "usb_receiver"
+transport = "hid_feature"
+writes_verified = false
+notes = "Read-only until a real feature-report capture confirms the layout. Beken 1D57 and GearHub/CompX 25A7 receivers are both matched; the 0xFFFF vendor page is the vendor driver interface."
+
+[[match]]
+vid = 0x1D57
+pid = 0xFA09
+usage_page = 0xFFFF
+usage = 0x0001
+
+[[match]]
+vid = 0x25A7
+pid = 0xFA09
+usage_page = 0xFFFF
+usage = 0x0001
+
+[battery]
+report_id = 0x05
+report_len = 65
+offset = 1
+width = 1
+encoding = "percent"
+
+[dpi]
+report_id = 0x05
+report_len = 65
+offset = 2
+encoding = "index_u8"
+values = [400, 800, 1200, 1600, 2400, 3200, 6400, 8000, 12000, 16000, 22000, 26000]
+
+[polling]
+report_id = 0x05
+report_len = 65
+offset = 3
+rates = [125, 250, 500, 1000]

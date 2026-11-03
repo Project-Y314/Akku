@@ -1,0 +1,6 @@
+/target/
+/dist/
+*.pdb
+*.zip
+.env
+Thumbs.db

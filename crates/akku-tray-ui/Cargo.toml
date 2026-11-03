@@ -1,0 +1,24 @@
+[package]
+name = "akku-tray-ui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "akku"
+path = "src/main.rs"
+
+[dependencies]
+akku-core.workspace = true
+akku-display.workspace = true
+akku-hid.workspace = true
+eframe.workspace = true
+serde.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tray-icon.workspace = true
+windows.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"

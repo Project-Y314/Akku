@@ -1,0 +1,44 @@
+[workspace]
+members = [
+    "crates/akku-core",
+    "crates/akku-hid",
+    "crates/akku-display",
+    "crates/akku-tray-ui",
+    "crates/akku-cli",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/ybreakless/akku"
+authors = ["Akku contributors"]
+
+[workspace.dependencies]
+akku-core = { path = "crates/akku-core" }
+akku-hid = { path = "crates/akku-hid" }
+akku-display = { path = "crates/akku-display" }
+
+async-hid = { version = "0.5.3", default-features = false, features = ["win32"] }
+clap = { version = "4.5", features = ["derive"] }
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
+futures-lite = "2.6"
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
+tokio = { version = "1.54", features = ["rt", "time", "sync", "macros"] }
+toml = "0.8"
+tray-icon = { version = "0.26.1", default-features = false }
+windows = "0.61"
+windows-sys = "0.61"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+opt-level = "s"
+
+[profile.dev]
+opt-level = 1

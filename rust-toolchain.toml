@@ -1,0 +1,7 @@
+[toolchain]
+# The application target. Install Visual Studio Build Tools 2022 with the
+# Desktop C++ workload and a Windows 11 SDK before building.
+channel = "1.99.1-x86_64-pc-windows-msvc"
+components = ["rustfmt", "clippy"]
+targets = ["x86_64-pc-windows-msvc"]
+profile = "minimal"

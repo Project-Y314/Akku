@@ -1,0 +1,18 @@
+[package]
+name = "akku-hid"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+akku-core.workspace = true
+async-hid.workspace = true
+async-trait = "0.1"
+futures-lite.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "time", "sync", "macros"] }
