@@ -50,8 +50,8 @@ fn main() {
             .with_app_id("akku")
             .with_title("akku")
             .with_icon(window_icon)
-            .with_inner_size(eframe::egui::vec2(430.0, 760.0))
-            .with_min_inner_size(eframe::egui::vec2(360.0, 500.0)),
+            .with_inner_size(eframe::egui::vec2(400.0, 520.0))
+            .with_min_inner_size(eframe::egui::vec2(360.0, 460.0)),
         ..Default::default()
     };
 

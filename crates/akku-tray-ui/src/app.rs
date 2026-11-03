@@ -130,6 +130,7 @@ pub struct AkkuApp {
     tray: Option<tray::TrayHandles>,
     tray_icon_state: Option<(u8, bool)>,
     slider_edits: HashMap<String, f32>,
+    dpi_manual_edits: HashMap<String, String>,
     monitors: Option<Vec<MonitorInfo>>,
     monitor_target: BTreeMap<String, u32>,
     monitor_result: BTreeMap<String, (bool, String)>,
@@ -160,6 +161,7 @@ impl AkkuApp {
             tray: None,
             tray_icon_state: None,
             slider_edits: HashMap::new(),
+            dpi_manual_edits: HashMap::new(),
             monitors: None,
             monitor_target: BTreeMap::new(),
             monitor_result: BTreeMap::new(),
@@ -244,6 +246,7 @@ impl AkkuApp {
         };
         let _ = handle.tray.set_tooltip(Some(tooltip_text(&self.snapshots)));
 
+        // Use the first device with a battery percent for the tray icon
         let Some(primary) = self
             .snapshots
             .iter()
@@ -468,10 +471,44 @@ impl AkkuApp {
             && let Some(values) = snapshot.dpi_values.clone()
         {
             self.section(ui, "DPI");
-            self.chips_row(ui, values, snapshot.dpi, |value| {
+            self.chips_row(ui, values.clone(), snapshot.dpi, |value| {
                 akku_hid::WorkerCommand::SetDpi {
                     manifest_id: id.clone(),
                     dpi: value,
+                }
+            });
+
+            // Manual DPI entry
+            let entry = self
+                .dpi_manual_edits
+                .entry(format!("{id}_dpi_manual"))
+                .or_insert(
+                    snapshot
+                        .dpi
+                        .map(|d| d.to_string())
+                        .unwrap_or_else(|| values[0].to_string()),
+                );
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new("Custom:")
+                        .monospace()
+                        .size(10.0)
+                        .color(palette.dim),
+                );
+                let response = ui.add(
+                    egui::TextEdit::singleline(entry)
+                        .desired_width(80.0)
+                        .font(egui::FontId::monospace(11.0)),
+                );
+                if response.lost_focus()
+                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                    && let Ok(dpi) = entry.trim().parse::<u16>()
+                {
+                    self.worker.send(akku_hid::WorkerCommand::SetDpi {
+                        manifest_id: id.clone(),
+                        dpi,
+                    });
+                    self.status = Some(format!("SET DPI {dpi} REQUESTED"));
                 }
             });
         }
