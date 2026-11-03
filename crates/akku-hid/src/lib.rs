@@ -18,3 +18,7 @@ pub use driver::{HidDriver, key_for_device};
 pub use enumerate::{describe, device_key, enumerate, find_manifest, map_error};
 pub use mock::MockDriver;
 pub use worker::{HidWorker, WorkerCommand, WorkerEvent, probe};
+
+/// Re-exports so command line tools can control the Hid flow without depending
+/// on async-hid directly.
+pub use async_hid::{Device, HidBackend};

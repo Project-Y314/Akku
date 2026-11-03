@@ -378,14 +378,18 @@ async fn run(
 }
 
 /// Convenience probe used by the CLI: match a manifest against all accessible
-/// devices and read the first battery report.
+/// devices and read a battery report from each.
+///
+/// Per-device failures land in the second list so one broken device cannot
+/// hide the readings of healthy ones.
 pub async fn probe(
     manifests: Vec<Manifest>,
     manifest_id: Option<&str>,
-) -> Result<Vec<(String, akku_core::BatteryReport)>, DriverError> {
+) -> Result<(Vec<(String, akku_core::BatteryReport)>, Vec<(String, DriverError)>), DriverError> {
     let backend = HidBackend::default();
     let devices = enumerate(&backend).await?;
-    let mut output = Vec::new();
+    let mut readings = Vec::new();
+    let mut failures = Vec::new();
     for device in devices {
         let Some(manifest) = find_manifest(&manifests, &device) else {
             continue;
@@ -395,10 +399,12 @@ pub async fn probe(
         }
         let id = manifest.id.clone();
         let mut driver = HidDriver::new(manifest.clone(), device);
-        let battery = driver.read_battery().await?;
-        output.push((id, battery));
+        match driver.read_battery().await {
+            Ok(battery) => readings.push((id, battery)),
+            Err(error) => failures.push((id, error)),
+        }
     }
-    Ok(output)
+    Ok((readings, failures))
 }
 
 #[cfg(test)]
