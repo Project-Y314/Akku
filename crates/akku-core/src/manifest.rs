@@ -240,10 +240,10 @@ impl Manifest {
             if battery.report_len == 0 || battery.offset + battery.width > battery.report_len {
                 errors.push("battery descriptor does not fit report_len".into());
             }
-            if let Some(charging) = battery.charging_offset {
-                if charging >= battery.report_len {
-                    errors.push("battery.charging_offset is outside report_len".into());
-                }
+            if let Some(charging) = battery.charging_offset
+                && charging >= battery.report_len
+            {
+                errors.push("battery.charging_offset is outside report_len".into());
             }
         } else {
             errors.push("battery descriptor is required for this release".into());
@@ -345,8 +345,8 @@ pub fn load_dir(path: &Path) -> Result<Vec<Manifest>, String> {
     for entry in entries {
         let source = std::fs::read_to_string(&entry)
             .map_err(|err| format!("cannot read {}: {err}", entry.display()))?;
-        let manifest = parse_manifest(&source)
-            .map_err(|err| format!("{}: {err}", entry.display()))?;
+        let manifest =
+            parse_manifest(&source).map_err(|err| format!("{}: {err}", entry.display()))?;
         if let Some(existing) = manifests
             .iter_mut()
             .find(|existing| existing.id == manifest.id)
@@ -417,11 +417,7 @@ values = [800, 400]
         .replace("Attack Shark (experimental)", "Attack Shark Override");
         std::fs::write(dir.join("attack_shark.toml"), source).unwrap();
         let manifests = load_dir(&dir).unwrap();
-        assert!(
-            manifests
-                .iter()
-                .any(|m| m.name == "Attack Shark Override")
-        );
+        assert!(manifests.iter().any(|m| m.name == "Attack Shark Override"));
         std::fs::remove_dir_all(dir).ok();
     }
 }

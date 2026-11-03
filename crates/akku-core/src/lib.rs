@@ -14,8 +14,8 @@ mod settings;
 
 pub use actuation::{DeadzoneLayer, effective_actuation};
 pub use capability::{
-    ActuationCapability, ActuationSpec, DpiCapability, DpiSpec, MacroCapability,
-    PeripheralDriver, PollingRateCapability, PollingSpec,
+    ActuationCapability, ActuationSpec, DpiCapability, DpiSpec, MacroCapability, PeripheralDriver,
+    PollingRateCapability, PollingSpec,
 };
 pub use discharge::{DischargeSample, DischargeTracker};
 pub use error::{DriverError, Result};
@@ -26,7 +26,6 @@ pub use manifest::{
     load_bundled, load_dir, parse_manifest,
 };
 pub use model::{
-    BatteryReport, BatterySnapshot, CapabilitySet, DeviceSnapshot, DeviceState, Settings,
-    Theme,
+    BatteryReport, BatterySnapshot, CapabilitySet, DeviceSnapshot, DeviceState, Settings, Theme,
 };
 pub use settings::{SettingsStore, default_settings_path};

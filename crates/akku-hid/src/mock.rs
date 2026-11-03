@@ -70,7 +70,11 @@ impl DpiCapability for MockDriver {
         if !self.writable {
             return Err(DriverError::Unsupported("mock is read-only"));
         }
-        if !self.dpi_spec.as_ref().is_some_and(|spec| spec.values.contains(&dpi)) {
+        if !self
+            .dpi_spec
+            .as_ref()
+            .is_some_and(|spec| spec.values.contains(&dpi))
+        {
             return Err(DriverError::InvalidArgument(format!("{dpi} DPI")));
         }
         self.dpi = Some(dpi);

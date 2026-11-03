@@ -81,12 +81,9 @@ dependencies = [
  "akku-display",
  "akku-hid",
  "eframe",
- "raw-window-handle",
- "serde",
  "tokio",
- "toml",
  "tray-icon",
- "windows",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

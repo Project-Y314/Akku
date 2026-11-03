@@ -5,10 +5,7 @@ use futures_lite::StreamExt;
 /// Enumerate every accessible HID interface. Interfaces that cannot be
 /// described are omitted by async-hid itself.
 pub async fn enumerate(backend: &HidBackend) -> Result<Vec<Device>> {
-    let stream = backend
-        .enumerate()
-        .await
-        .map_err(map_error)?;
+    let stream = backend.enumerate().await.map_err(map_error)?;
     let mut devices = Vec::new();
     let mut stream = std::pin::pin!(stream);
     while let Some(device) = stream.next().await {

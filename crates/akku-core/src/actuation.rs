@@ -39,11 +39,7 @@ pub fn effective_actuation(
     }
 
     let mut ordered = layers.to_vec();
-    ordered.sort_by(|a, b| {
-        a.priority
-            .cmp(&b.priority)
-            .then_with(|| a.id.cmp(&b.id))
-    });
+    ordered.sort_by(|a, b| a.priority.cmp(&b.priority).then_with(|| a.id.cmp(&b.id)));
 
     let mut value = base_mm;
     for layer in &ordered {

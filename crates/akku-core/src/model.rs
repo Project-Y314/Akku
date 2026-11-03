@@ -95,6 +95,12 @@ pub struct DeviceSnapshot {
     pub polling_hz: Option<u16>,
     pub actuation_mm: Option<f32>,
     pub last_error: Option<String>,
+    /// Allowed DPI values from the manifest, so the UI can render chips.
+    pub dpi_values: Option<Vec<u16>>,
+    /// Allowed polling rates from the manifest.
+    pub polling_rates: Option<Vec<u16>>,
+    /// Physical actuation travel from the manifest.
+    pub actuation_range: Option<crate::capability::ActuationSpec>,
 }
 
 impl DeviceSnapshot {
@@ -121,6 +127,9 @@ impl DeviceSnapshot {
             polling_hz: None,
             actuation_mm: None,
             last_error: None,
+            dpi_values: None,
+            polling_rates: None,
+            actuation_range: None,
         }
     }
 }

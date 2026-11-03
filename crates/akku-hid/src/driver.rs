@@ -1,7 +1,6 @@
 use akku_core::{
-    ActuationCapability, ActuationSpec, BatteryReport, CapabilitySet, DeviceKey,
-    DpiCapability, DpiSpec, DriverError, Manifest, PeripheralDriver, PollingRateCapability,
-    PollingSpec, Result,
+    ActuationCapability, ActuationSpec, BatteryReport, CapabilitySet, DeviceKey, DpiCapability,
+    DpiSpec, DriverError, Manifest, PeripheralDriver, PollingRateCapability, PollingSpec, Result,
 };
 use async_hid::{AsyncHidFeatureHandle, Device};
 use async_trait::async_trait;
@@ -39,7 +38,12 @@ impl HidDriver {
             .battery
             .as_ref()
             .map(|descriptor| descriptor.report_len)
-            .or_else(|| self.manifest.dpi.as_ref().map(|descriptor| descriptor.report_len))
+            .or_else(|| {
+                self.manifest
+                    .dpi
+                    .as_ref()
+                    .map(|descriptor| descriptor.report_len)
+            })
             .or_else(|| {
                 self.manifest
                     .polling
@@ -107,7 +111,10 @@ fn map_hid_error(error: async_hid::HidError) -> DriverError {
 #[async_trait]
 impl DpiCapability for HidDriver {
     fn dpi_spec(&self) -> Option<DpiSpec> {
-        self.manifest.dpi.as_ref().map(|descriptor| descriptor.spec())
+        self.manifest
+            .dpi
+            .as_ref()
+            .map(|descriptor| descriptor.spec())
     }
 
     async fn read_dpi(&mut self) -> Result<Option<u16>> {

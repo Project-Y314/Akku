@@ -4,7 +4,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime};
 
 use akku_core::{
-    ActuationCapability, DeviceKind, DeviceSnapshot, DeviceState, DriverError, DpiCapability,
+    ActuationCapability, DeviceKind, DeviceSnapshot, DeviceState, DpiCapability, DriverError,
     Manifest, PeripheralDriver, PollingRateCapability,
 };
 use async_hid::HidBackend;
@@ -17,9 +17,18 @@ use crate::enumerate::{device_key, enumerate, find_manifest};
 #[derive(Debug)]
 pub enum WorkerCommand {
     Refresh,
-    SetDpi { manifest_id: String, dpi: u16 },
-    SetPolling { manifest_id: String, hz: u16 },
-    SetActuation { manifest_id: String, millimetres: f32 },
+    SetDpi {
+        manifest_id: String,
+        dpi: u16,
+    },
+    SetPolling {
+        manifest_id: String,
+        hz: u16,
+    },
+    SetActuation {
+        manifest_id: String,
+        millimetres: f32,
+    },
     Shutdown,
 }
 
@@ -50,13 +59,7 @@ impl HidWorker {
                     .enable_all()
                     .build()
                     .expect("failed to create HID runtime");
-                runtime.block_on(run(
-                    manifests,
-                    poll_interval,
-                    command_rx,
-                    event_tx,
-                    repaint,
-                ));
+                runtime.block_on(run(manifests, poll_interval, command_rx, event_tx, repaint));
             })
             .expect("failed to start HID thread");
         Self {
@@ -154,6 +157,18 @@ impl Registry {
                 snapshot.polling_hz = previous.snapshot.polling_hz;
                 snapshot.actuation_mm = previous.snapshot.actuation_mm;
             }
+            snapshot.dpi_values = manifest
+                .dpi
+                .as_ref()
+                .map(|descriptor| descriptor.values.clone());
+            snapshot.polling_rates = manifest
+                .polling
+                .as_ref()
+                .map(|descriptor| descriptor.rates.clone());
+            snapshot.actuation_range = manifest
+                .actuation
+                .as_ref()
+                .map(|descriptor| descriptor.spec());
             let driver = HidDriver::new(manifest, device);
             snapshot.capabilities = driver.capabilities();
             snapshot.writable = driver.manifest().writes_verified;
@@ -185,29 +200,27 @@ impl Registry {
                     managed.snapshot.battery.stale = true;
                     managed.snapshot.state = match error {
                         DriverError::Disconnected => DeviceState::Disconnected,
-                        DriverError::DeviceBusy => {
-                            DeviceState::Error("DEVICE IN USE".to_string())
-                        }
+                        DriverError::DeviceBusy => DeviceState::Error("DEVICE IN USE".to_string()),
                         _ => DeviceState::Stale,
                     };
                     managed.snapshot.last_error = Some(error.to_string());
                 }
             }
 
-            if managed.snapshot.capabilities.dpi {
-                if let Ok(dpi) = managed.driver.read_dpi().await {
-                    managed.snapshot.dpi = dpi;
-                }
+            if managed.snapshot.capabilities.dpi
+                && let Ok(dpi) = managed.driver.read_dpi().await
+            {
+                managed.snapshot.dpi = dpi;
             }
-            if managed.snapshot.capabilities.polling_rate {
-                if let Ok(rate) = managed.driver.read_polling_rate().await {
-                    managed.snapshot.polling_hz = rate;
-                }
+            if managed.snapshot.capabilities.polling_rate
+                && let Ok(rate) = managed.driver.read_polling_rate().await
+            {
+                managed.snapshot.polling_hz = rate;
             }
-            if managed.snapshot.capabilities.actuation {
-                if let Ok(actuation) = managed.driver.read_actuation().await {
-                    managed.snapshot.actuation_mm = actuation;
-                }
+            if managed.snapshot.capabilities.actuation
+                && let Ok(actuation) = managed.driver.read_actuation().await
+            {
+                managed.snapshot.actuation_mm = actuation;
             }
 
             if now.duration_since(managed.last_success) > self.poll_interval * 2 {
@@ -257,14 +270,7 @@ impl Registry {
                     Some(managed) => managed.driver.set_actuation(millimetres).await,
                     None => Err(DriverError::Disconnected),
                 };
-                self.finish_command(
-                    &manifest_id,
-                    result,
-                    None,
-                    None,
-                    Some(millimetres),
-                    events,
-                );
+                self.finish_command(&manifest_id, result, None, None, Some(millimetres), events);
             }
             WorkerCommand::Shutdown => {}
         }
@@ -385,7 +391,13 @@ async fn run(
 pub async fn probe(
     manifests: Vec<Manifest>,
     manifest_id: Option<&str>,
-) -> Result<(Vec<(String, akku_core::BatteryReport)>, Vec<(String, DriverError)>), DriverError> {
+) -> Result<
+    (
+        Vec<(String, akku_core::BatteryReport)>,
+        Vec<(String, DriverError)>,
+    ),
+    DriverError,
+> {
     let backend = HidBackend::default();
     let devices = enumerate(&backend).await?;
     let mut readings = Vec::new();
@@ -415,11 +427,7 @@ mod tests {
 
     #[test]
     fn worker_starts_and_stops_without_hardware() {
-        let mut worker = HidWorker::spawn(
-            Vec::new(),
-            Duration::from_secs(60),
-            Arc::new(|| {}),
-        );
+        let mut worker = HidWorker::spawn(Vec::new(), Duration::from_secs(60), Arc::new(|| {}));
         worker.send(WorkerCommand::Refresh);
         worker.shutdown();
     }

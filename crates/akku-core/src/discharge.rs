@@ -35,8 +35,11 @@ impl DischargeTracker {
         self.samples.clear();
     }
 
-    /// Add a sample. Returns false when the sample was rejected (bad value,
-    /// non-monotonic time, or a sleep/suspend gap).
+    /// Add a sample. Returns true when the sample was accepted into the
+    /// ongoing series. Returns false when the sample was rejected (bad value,
+    /// non-monotonic time) or when it follows a sleep/suspend gap — such a
+    /// sample is not a usable continuation, but it becomes the baseline of a
+    /// fresh series.
     pub fn observe(&mut self, percent: u8, seconds: f64) -> bool {
         if !seconds.is_finite() || percent > 100 {
             return false;
@@ -46,7 +49,14 @@ impl DischargeTracker {
                 return false;
             }
             if seconds - last.seconds > self.max_gap_seconds {
+                // A long gap means the device likely slept or disconnected:
+                // old samples say nothing about the new baseline. Start over.
                 self.samples.clear();
+                self.samples.push(DischargeSample {
+                    seconds,
+                    percent: f32::from(percent),
+                });
+                return false;
             }
         }
         self.samples.push(DischargeSample {
@@ -55,7 +65,7 @@ impl DischargeTracker {
         });
         let cutoff = seconds - self.window_seconds;
         self.samples.retain(|sample| sample.seconds >= cutoff);
-        self.samples.len() >= 2
+        true
     }
 
     /// Positive values mean percent per hour. `None` until there are two usable
@@ -66,7 +76,12 @@ impl DischargeTracker {
         }
         let n = self.samples.len() as f64;
         let mean_x = self.samples.iter().map(|s| s.seconds).sum::<f64>() / n;
-        let mean_y = self.samples.iter().map(|s| f64::from(s.percent)).sum::<f64>() / n;
+        let mean_y = self
+            .samples
+            .iter()
+            .map(|s| f64::from(s.percent))
+            .sum::<f64>()
+            / n;
         let mut numerator = 0.0;
         let mut denominator = 0.0;
         for sample in &self.samples {
@@ -99,9 +114,11 @@ mod tests {
 
     #[test]
     fn computes_drain_rate() {
-        let mut tracker = DischargeTracker::new();
-        tracker.observe(100, 0.0);
-        tracker.observe(99, 3600.0);
+        // The synthetic samples are an hour apart; widen the gap and window
+        // limits (the production defaults assume 30–90 s polling).
+        let mut tracker = DischargeTracker::with_limits(4.0 * 3600.0, 4.0 * 3600.0);
+        assert!(tracker.observe(100, 0.0));
+        assert!(tracker.observe(99, 3600.0));
         let rate = tracker.drain_percent_per_hour().unwrap();
         assert!((rate - 1.0).abs() < 0.001);
         let eta = tracker.time_to_empty().unwrap();
@@ -111,8 +128,10 @@ mod tests {
     #[test]
     fn rejects_sleep_gap() {
         let mut tracker = DischargeTracker::new();
-        tracker.observe(100, 0.0);
-        tracker.observe(90, 20.0 * 60.0);
+        assert!(tracker.observe(100, 0.0));
+        // 20 minutes without a sample: the series was interrupted, so the
+        // next observation may not be fit against the old samples.
+        assert!(!tracker.observe(90, 20.0 * 60.0));
         assert_eq!(tracker.drain_percent_per_hour(), None);
     }
 
@@ -125,7 +144,9 @@ mod tests {
 
     #[test]
     fn ignores_charging_trend() {
-        let mut tracker = DischargeTracker::new();
+        // Widen the limits so the rising trend is actually fitted rather
+        // than discarded by the sleep-gap reset.
+        let mut tracker = DischargeTracker::with_limits(4.0 * 3600.0, 4.0 * 3600.0);
         tracker.observe(50, 0.0);
         tracker.observe(60, 3600.0);
         assert_eq!(tracker.drain_percent_per_hour(), None);

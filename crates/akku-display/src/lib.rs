@@ -72,13 +72,13 @@ pub fn find_mode(
 mod win {
     use super::*;
     use std::ffi::c_void;
-    use windows::core::PCWSTR;
     use windows::Win32::Graphics::Gdi::{
         CDS_TEST, CDS_TYPE, CDS_UPDATEREGISTRY, ChangeDisplaySettingsExW, DEVMODEW,
-        DISPLAY_DEVICEW, DISP_CHANGE_SUCCESSFUL, ENUM_CURRENT_SETTINGS,
-        ENUM_DISPLAY_SETTINGS_MODE, EnumDisplayDevicesW, EnumDisplaySettingsW,
+        DISP_CHANGE_SUCCESSFUL, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE,
+        EnumDisplayDevicesW, EnumDisplaySettingsW,
     };
     use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CMONITORS};
+    use windows::core::PCWSTR;
 
     fn wide(value: &str) -> Vec<u16> {
         value.encode_utf16().chain(std::iter::once(0)).collect()
@@ -104,11 +104,7 @@ mod win {
             ..Default::default()
         };
         let ok = unsafe {
-            EnumDisplaySettingsW(
-                PCWSTR(name.as_ptr()),
-                ENUM_CURRENT_SETTINGS,
-                &mut mode,
-            )
+            EnumDisplaySettingsW(PCWSTR(name.as_ptr()), ENUM_CURRENT_SETTINGS, &mut mode)
         };
         if !ok.as_bool() {
             return Err(DisplayError::NotFound(device.to_string()));
@@ -146,9 +142,7 @@ mod win {
                 cb: std::mem::size_of::<DISPLAY_DEVICEW>() as u32,
                 ..Default::default()
             };
-            let ok = unsafe {
-                EnumDisplayDevicesW(PCWSTR::null(), index, &mut device, 0)
-            };
+            let ok = unsafe { EnumDisplayDevicesW(PCWSTR::null(), index, &mut device, 0) };
             if !ok.as_bool() {
                 break;
             }
@@ -191,8 +185,7 @@ mod win {
         let mut desired = current;
         desired.dmDisplayFrequency = target.refresh_hz;
         desired.dmFields = windows::Win32::Graphics::Gdi::DEVMODE_FIELD_FLAGS(
-            desired.dmFields.0
-                | windows::Win32::Graphics::Gdi::DM_DISPLAYFREQUENCY.0,
+            desired.dmFields.0 | windows::Win32::Graphics::Gdi::DM_DISPLAYFREQUENCY.0,
         );
 
         let test_flags = CDS_TYPE(CDS_TEST.0);

@@ -182,7 +182,11 @@ async fn list_devices(manifests: &[Manifest]) -> Result<(), String> {
             "  kind={} connection={} writes={}",
             manifest.kind.label(),
             manifest.connection.label(),
-            if manifest.writes_verified { "enabled" } else { "disabled" }
+            if manifest.writes_verified {
+                "enabled"
+            } else {
+                "disabled"
+            }
         );
         match battery {
             Ok(report) => println!("  battery={}", format_battery(&report)),
@@ -363,7 +367,11 @@ async fn polling(manifests: &[Manifest], id: Option<&str>, set: Option<u16>) -> 
     Ok(())
 }
 
-async fn actuation(manifests: &[Manifest], id: Option<&str>, set: Option<f32>) -> Result<(), String> {
+async fn actuation(
+    manifests: &[Manifest],
+    id: Option<&str>,
+    set: Option<f32>,
+) -> Result<(), String> {
     let (mut driver, manifest) = pick_target(manifests, id, &[DeviceKind::Keyboard]).await?;
     let descriptor = manifest
         .actuation
@@ -406,10 +414,7 @@ fn monitors(all_modes: bool) -> Result<(), String> {
     for monitor in &monitors {
         println!("{}  {}", monitor.id, monitor.label);
         println!("  current: {}", monitor.current);
-        println!(
-            "  {} normalized mode(s) total",
-            monitor.modes.len()
-        );
+        println!("  {} normalized mode(s) total", monitor.modes.len());
         print_modes_at_current_resolution(monitor, all_modes);
     }
     println!("\n{} monitor(s) enumerated", monitors.len());
@@ -426,9 +431,7 @@ fn print_modes_at_current_resolution(monitor: &akku_display::MonitorInfo, all_mo
     let mut rates: Vec<u32> = monitor
         .modes
         .iter()
-        .filter(|mode| {
-            mode.width == monitor.current.width && mode.height == monitor.current.height
-        })
+        .filter(|mode| mode.width == monitor.current.width && mode.height == monitor.current.height)
         .map(|mode| mode.refresh_hz)
         .collect();
     if rates.is_empty() {
@@ -464,12 +467,16 @@ fn change_refresh(monitor: &str, refresh_hz: u32, persist: bool) -> Result<(), S
 }
 
 async fn demo() -> Result<(), String> {
-    println!("DEMO — the full control pipeline on deterministic virtual devices (no hardware is touched)");
+    println!(
+        "DEMO — the full control pipeline on deterministic virtual devices (no hardware is touched)"
+    );
     let mut mouse = MockDriver::mouse();
     let mut keyboard = MockDriver::keyboard();
 
     let mouse_spec = mouse.dpi_spec().expect("demo mouse exposes DPI");
-    let keyboard_spec = keyboard.actuation_spec().expect("demo keyboard exposes actuation");
+    let keyboard_spec = keyboard
+        .actuation_spec()
+        .expect("demo keyboard exposes actuation");
 
     let before_mouse = mouse.read_battery().await.unwrap();
     let before_keyboard = keyboard.read_battery().await.unwrap();
@@ -478,16 +485,26 @@ async fn demo() -> Result<(), String> {
         "  MOUSE    dpi={} polling={} battery={}",
         mouse.read_dpi().await.unwrap().unwrap(),
         format_args!("{} Hz", mouse.read_polling_rate().await.unwrap().unwrap()),
-        before_mouse.percent.map(|p| format!("{p}%")).unwrap_or_default()
+        before_mouse
+            .percent
+            .map(|p| format!("{p}%"))
+            .unwrap_or_default()
     );
     println!(
         "  KEYBOARD polling={} battery={} actuation={:.1} mm",
         keyboard.read_polling_rate().await.unwrap().unwrap(),
-        before_keyboard.percent.map(|p| format!("{p}%")).unwrap_or_default(),
+        before_keyboard
+            .percent
+            .map(|p| format!("{p}%"))
+            .unwrap_or_default(),
         keyboard.read_actuation().await.unwrap().unwrap()
     );
 
-    for dpi_value in [mouse_spec.min().expect("non-empty"), 800, mouse_spec.max().expect("non-empty")] {
+    for dpi_value in [
+        mouse_spec.min().expect("non-empty"),
+        800,
+        mouse_spec.max().expect("non-empty"),
+    ] {
         mouse
             .set_dpi(dpi_value)
             .await
@@ -526,4 +543,3 @@ async fn demo() -> Result<(), String> {
     println!("DEMO complete: decode/encode, validation and clamping all behaved");
     Ok(())
 }
-

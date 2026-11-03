@@ -1,6 +1,6 @@
 use akku_core::{
-    BatteryDescriptor, BatteryEncoding, BatteryReport, DpiDescriptor, DpiEncoding,
-    DriverError, PollingDescriptor, Result,
+    BatteryDescriptor, BatteryEncoding, BatteryReport, DpiDescriptor, DpiEncoding, DriverError,
+    PollingDescriptor, Result,
 };
 
 fn read_uint_le(bytes: &[u8], offset: usize, width: usize) -> Result<u32> {
@@ -19,7 +19,9 @@ fn read_uint_le(bytes: &[u8], offset: usize, width: usize) -> Result<u32> {
 
 fn write_uint_le(bytes: &mut [u8], offset: usize, width: usize, value: u32) -> Result<()> {
     if width == 0 || width > 4 || offset + width > bytes.len() {
-        return Err(DriverError::Protocol("write field does not fit report".into()));
+        return Err(DriverError::Protocol(
+            "write field does not fit report".into(),
+        ));
     }
     for index in 0..width {
         bytes[offset + index] = ((value >> (index * 8)) & 0xFF) as u8;
@@ -65,18 +67,19 @@ pub fn decode_dpi(bytes: &[u8], descriptor: &DpiDescriptor) -> Result<u16> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
         return Err(DriverError::Protocol("unexpected DPI report id".into()));
     }
-    let value = match descriptor.encoding {
-        DpiEncoding::IndexU8 => {
-            let index = *bytes
-                .get(descriptor.offset)
-                .ok_or_else(|| DriverError::Protocol("DPI index missing".into()))?
-                as usize;
-            descriptor.values.get(index).copied().ok_or_else(|| {
-                DriverError::Protocol(format!("DPI index {index} out of range"))
-            })?
-        }
-        DpiEncoding::U16Le => read_uint_le(bytes, descriptor.offset, 2)? as u16,
-    };
+    let value =
+        match descriptor.encoding {
+            DpiEncoding::IndexU8 => {
+                let index = *bytes
+                    .get(descriptor.offset)
+                    .ok_or_else(|| DriverError::Protocol("DPI index missing".into()))?
+                    as usize;
+                descriptor.values.get(index).copied().ok_or_else(|| {
+                    DriverError::Protocol(format!("DPI index {index} out of range"))
+                })?
+            }
+            DpiEncoding::U16Le => read_uint_le(bytes, descriptor.offset, 2)? as u16,
+        };
     Ok(nearest(&descriptor.values, value))
 }
 
@@ -90,17 +93,15 @@ pub fn decode_polling(bytes: &[u8], descriptor: &PollingDescriptor) -> Result<u1
 
 pub fn decode_actuation(bytes: &[u8], descriptor: &akku_core::ActuationDescriptor) -> Result<f32> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
-        return Err(DriverError::Protocol("unexpected actuation report id".into()));
+        return Err(DriverError::Protocol(
+            "unexpected actuation report id".into(),
+        ));
     }
     let hundredths = read_uint_le(bytes, descriptor.offset, 2)? as f32;
     Ok((hundredths / 100.0).clamp(descriptor.min_mm, descriptor.max_mm))
 }
 
-pub fn encode_dpi(
-    buffer: &mut [u8],
-    descriptor: &DpiDescriptor,
-    dpi: u16,
-) -> Result<()> {
+pub fn encode_dpi(buffer: &mut [u8], descriptor: &DpiDescriptor, dpi: u16) -> Result<()> {
     let (index, value) = descriptor
         .values
         .iter()
@@ -121,11 +122,7 @@ pub fn encode_dpi(
     Ok(())
 }
 
-pub fn encode_polling(
-    buffer: &mut [u8],
-    descriptor: &PollingDescriptor,
-    hz: u16,
-) -> Result<()> {
+pub fn encode_polling(buffer: &mut [u8], descriptor: &PollingDescriptor, hz: u16) -> Result<()> {
     if !descriptor.rates.contains(&hz) {
         return Err(DriverError::InvalidArgument(format!(
             "{hz} Hz is not supported"

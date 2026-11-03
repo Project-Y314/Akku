@@ -13,7 +13,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
-repository = "https://github.com/ybreakless/akku"
+repository = "https://github.com/ybreakless/Akku"
 authors = ["Akku contributors"]
 
 [workspace.dependencies]
