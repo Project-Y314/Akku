@@ -1,4 +1,4 @@
-use akku_core::{DeviceKey, DriverError, Manifest, Result};
+use akku_core::{DeckError as DriverError, DeviceKey, Manifest, Result};
 use async_hid::{Device, HidBackend, HidError};
 use futures_lite::StreamExt;
 
@@ -32,9 +32,12 @@ pub fn find_manifest<'a>(manifests: &'a [Manifest], device: &Device) -> Option<&
 pub fn map_error(error: HidError) -> DriverError {
     let message = error.to_string();
     if message.contains("Access is denied") || message.contains("0x80070005") {
-        DriverError::DeviceBusy
+        DriverError::DeviceBusy {
+            device_id: "unknown".into(),
+            retries_attempted: 0,
+        }
     } else {
-        DriverError::Transport(message)
+        DriverError::Transport { message }
     }
 }
 

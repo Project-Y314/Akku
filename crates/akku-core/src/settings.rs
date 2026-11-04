@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::model::Settings;
+use crate::Settings;
 
 /// File-backed settings. Writes are atomic (temporary file + rename) so a crash
 /// during save never leaves a truncated TOML file.

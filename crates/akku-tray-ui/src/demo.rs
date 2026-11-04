@@ -4,15 +4,17 @@
 //! Usage: `akku --demo`. The battery drains slowly so the UI is never static;
 //! writes validate and clamp exactly like the real path.
 
+#![allow(unused_imports)]
+
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant, SystemTime};
 
 use akku_core::{
-    ActuationCapability, ConnectionKind, DeviceKind, DeviceSnapshot, DeviceState, DpiCapability,
-    ManifestId, PeripheralDriver, PollingRateCapability,
+    ActuationCapability, Capabilities, ConnectionKind, DeviceId, DeviceKind, DeviceState,
+    DpiCapability, ManifestId, PeripheralDriver, PollingRateCapability,
 };
-use akku_hid::{MockDriver, WorkerCommand, WorkerEvent};
+use akku_hid::{CapabilitySet, DeviceSnapshot, MockDriver, WorkerCommand, WorkerEvent};
 use tokio::sync::mpsc as tokio_mpsc;
 
 const DEMO_POLL_INTERVAL: Duration = Duration::from_secs(5);
@@ -201,6 +203,7 @@ async fn snapshot(
     driver: &mut MockDriver,
 ) -> DeviceSnapshot {
     let key = driver.key().clone();
+    let caps = driver.capabilities();
     let mut snapshot = DeviceSnapshot::new(
         ManifestId(manifest_id.to_string()),
         key,
@@ -209,9 +212,15 @@ async fn snapshot(
         kind,
         ConnectionKind::UsbReceiver,
     );
-    snapshot.capabilities = driver.capabilities();
+    snapshot.capabilities = CapabilitySet {
+        dpi: caps.contains(Capabilities::DPI),
+        polling_rate: caps.contains(Capabilities::POLLING_RATE),
+        actuation: caps.contains(Capabilities::ACTUATION),
+        macros: caps.contains(Capabilities::MACROS),
+    };
     snapshot.writable = true;
-    snapshot.state = DeviceState::Connected;
+    snapshot.state = akku_core::DeviceState::empty_for(DeviceId::new("", 0, 0, 0, 0), 0);
+    snapshot.state.health = akku_core::DeviceHealth::Online;
     snapshot.last_error = None;
 
     if let Ok(report) = driver.read_battery().await {
@@ -223,8 +232,8 @@ async fn snapshot(
     snapshot.dpi = driver.read_dpi().await.ok().flatten();
     snapshot.polling_hz = driver.read_polling_rate().await.ok().flatten();
     snapshot.actuation_mm = driver.read_actuation().await.ok().flatten();
-    snapshot.dpi_values = driver.dpi_spec().map(|spec| spec.values);
-    snapshot.polling_rates = driver.polling_spec().map(|spec| spec.rates);
+    snapshot.dpi_values = driver.dpi_spec().map(|spec| spec.presets);
+    snapshot.polling_rates = driver.polling_spec().map(|spec| spec.rates_hz);
     snapshot.actuation_range = driver.actuation_spec();
     snapshot
 }

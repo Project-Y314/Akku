@@ -2,8 +2,8 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
-use crate::capability::{ActuationSpec, DpiSpec, PollingSpec};
 use crate::ids::{DeviceKey, ManifestId};
+use crate::model::{ActuationSpec, DpiSpec, PollingSpec};
 
 pub const MANIFEST_SCHEMA: u32 = 1;
 
@@ -129,7 +129,7 @@ pub struct DpiDescriptor {
 
 impl DpiDescriptor {
     pub fn spec(&self) -> DpiSpec {
-        DpiSpec::new(self.values.clone())
+        DpiSpec::discrete(self.values.clone())
     }
 }
 
@@ -144,7 +144,9 @@ pub struct PollingDescriptor {
 
 impl PollingDescriptor {
     pub fn spec(&self) -> PollingSpec {
-        PollingSpec::new(self.rates.clone())
+        PollingSpec {
+            rates_hz: self.rates.clone(),
+        }
     }
 }
 
@@ -240,8 +242,9 @@ impl Manifest {
             if battery.report_len == 0 || battery.offset + battery.width > battery.report_len {
                 errors.push("battery descriptor does not fit report_len".into());
             }
-            if let Some(charging) = battery.charging_offset
-                && charging >= battery.report_len
+            if battery
+                .charging_offset
+                .is_some_and(|charging| charging >= battery.report_len)
             {
                 errors.push("battery.charging_offset is outside report_len".into());
             }
@@ -305,9 +308,9 @@ impl Manifest {
                 && m.pid == key.product_id
                 && m.usage_page == key.usage_page
                 && m.usage == key.usage
-                && m.serial
-                    .as_ref()
-                    .is_none_or(|serial| key.serial.as_deref() == Some(serial.as_str()))
+                && m.serial.as_ref().map_or(true, |serial| {
+                    key.serial.as_deref() == Some(serial.as_str())
+                })
         })
     }
 }

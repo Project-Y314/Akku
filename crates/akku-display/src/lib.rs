@@ -72,13 +72,13 @@ pub fn find_mode(
 mod win {
     use super::*;
     use std::ffi::c_void;
+    use windows::core::PCWSTR;
     use windows::Win32::Graphics::Gdi::{
-        CDS_TEST, CDS_TYPE, CDS_UPDATEREGISTRY, ChangeDisplaySettingsExW, DEVMODEW,
-        DISP_CHANGE_SUCCESSFUL, DISPLAY_DEVICEW, ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE,
-        EnumDisplayDevicesW, EnumDisplaySettingsW,
+        ChangeDisplaySettingsExW, EnumDisplayDevicesW, EnumDisplaySettingsW, CDS_TEST, CDS_TYPE,
+        CDS_UPDATEREGISTRY, DEVMODEW, DISPLAY_DEVICEW, DISP_CHANGE_SUCCESSFUL,
+        ENUM_CURRENT_SETTINGS, ENUM_DISPLAY_SETTINGS_MODE,
     };
     use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CMONITORS};
-    use windows::core::PCWSTR;
 
     fn wide(value: &str) -> Vec<u16> {
         value.encode_utf16().chain(std::iter::once(0)).collect()

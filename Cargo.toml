@@ -9,27 +9,33 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.2.0"
-edition = "2024"
-rust-version = "1.99"
+version = "0.3.0"
+edition = "2021"
+rust-version = "1.78"
 license = "MIT"
-repository = "https://github.com/ybreakless/Akku"
-authors = ["Akku contributors"]
+repository = "https://github.com/ybreakless/PeripheralDeck"
+authors = ["PeripheralDeck Contributors"]
 
 [workspace.dependencies]
 akku-core = { path = "crates/akku-core" }
 akku-hid = { path = "crates/akku-hid" }
 akku-display = { path = "crates/akku-display" }
 
-async-hid = { version = "0.5.3", default-features = false, features = ["win32"] }
-clap = { version = "4.5", features = ["derive"] }
-eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
-futures-lite = "2.6"
+bitflags = { version = "2.6", features = ["serde"] }
+hidapi = { version = "2.6", default-features = false, features = ["linux-static-hidraw"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 thiserror = "2.0"
-tokio = { version = "1.54", features = ["rt", "time", "sync", "macros"] }
+tokio = { version = "1.40", features = ["rt", "rt-multi-thread", "time", "sync", "macros", "net"] }
 toml = "0.8"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 tray-icon = { version = "0.26.1", default-features = false }
+eframe = { version = "0.37.0", default-features = false, features = ["glow", "default_fonts"] }
+async-hid = { version = "0.5.3", default-features = false, features = ["win32"] }
+futures-lite = "2.6"
+clap = { version = "4.5", features = ["derive"] }
 windows = "0.61"
 windows-sys = "0.61"
 

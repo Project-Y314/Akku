@@ -1,0 +1,37 @@
+[package]
+name = "peripheral-deck"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "peripheral_deck_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+peripheral-deck-core.workspace = true
+bitflags.workspace = true
+hidapi.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-autostart.workspace = true
+tauri-plugin-shell.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[features]
+default = []
+vendor-sdk-windows = []
+sqlite-telemetry = ["dep:rusqlite"]
+
+[dependencies.rusqlite]
+workspace = true
+optional = true

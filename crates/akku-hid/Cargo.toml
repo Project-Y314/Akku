@@ -7,12 +7,16 @@ license.workspace = true
 
 [dependencies]
 akku-core.workspace = true
-async-hid.workspace = true
-async-trait = "0.1"
-futures-lite.workspace = true
+async-hid = { workspace = true }
+futures-lite = { workspace = true }
+hidapi.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+async-trait = "0.1"
+
+[features]
+vendor-sdk-windows = []
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "time", "sync", "macros"] }

@@ -11,12 +11,12 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 
 use akku_core::{
-    ActuationCapability, DeviceKind, DpiCapability, Manifest, PeripheralDriver,
-    PollingRateCapability, load_bundled, load_dir,
+    load_bundled, load_dir, ActuationCapability, DeviceKind, DpiCapability, Manifest,
+    PeripheralDriver, PollingRateCapability,
 };
 use akku_display::{list_monitors, set_refresh};
 use akku_hid::{
-    Device, HidBackend, HidDriver, MockDriver, describe, enumerate, find_manifest, probe,
+    describe, enumerate, find_manifest, probe, Device, HidBackend, HidDriver, MockDriver,
 };
 
 #[derive(Parser)]
@@ -501,9 +501,9 @@ async fn demo() -> Result<(), String> {
     );
 
     for dpi_value in [
-        mouse_spec.min().expect("non-empty"),
+        mouse_spec.presets.first().copied().expect("non-empty"),
         800,
-        mouse_spec.max().expect("non-empty"),
+        mouse_spec.presets.last().copied().expect("non-empty"),
     ] {
         mouse
             .set_dpi(dpi_value)
@@ -515,8 +515,12 @@ async fn demo() -> Result<(), String> {
         );
     }
 
+    let clamped = 1.5_f32.clamp(keyboard_spec.min_mm, keyboard_spec.max_mm);
+    let steps = ((clamped - keyboard_spec.min_mm) / keyboard_spec.step_mm).round();
+    let clamped = (keyboard_spec.min_mm + steps * keyboard_spec.step_mm)
+        .clamp(keyboard_spec.min_mm, keyboard_spec.max_mm);
     keyboard
-        .set_actuation(keyboard_spec.clamp(1.5))
+        .set_actuation(clamped)
         .await
         .map_err(|err| format!("demo actuation write failed: {err}"))?;
     println!(

@@ -1,6 +1,7 @@
 use akku_core::{
-    ActuationCapability, ActuationSpec, BatteryReport, CapabilitySet, DeviceKey, DpiCapability,
-    DpiSpec, DriverError, PeripheralDriver, PollingRateCapability, PollingSpec, Result,
+    ActuationCapability, ActuationSpec, BatteryReport, Capabilities, DeckError as DriverError,
+    DeviceKey, DpiCapability, DpiSpec, PeripheralDriver, PollingRateCapability, PollingSpec,
+    Result,
 };
 use async_trait::async_trait;
 
@@ -22,9 +23,11 @@ impl MockDriver {
         Self {
             key: DeviceKey::new(0x3554, 0xFA09, 0xFFFF, 0x0001),
             battery: BatteryReport::percent(87),
-            dpi_spec: Some(DpiSpec::new(vec![400, 800, 1600, 3200])),
+            dpi_spec: Some(DpiSpec::discrete(vec![400, 800, 1600, 3200])),
             dpi: Some(1600),
-            polling_spec: Some(PollingSpec::new(vec![125, 500, 1000])),
+            polling_spec: Some(PollingSpec {
+                rates_hz: vec![125, 500, 1000],
+            }),
             polling: Some(1000),
             actuation_spec: None,
             actuation: None,
@@ -38,7 +41,9 @@ impl MockDriver {
             battery: BatteryReport::percent(64),
             dpi_spec: None,
             dpi: None,
-            polling_spec: Some(PollingSpec::new(vec![125, 250, 500, 1000])),
+            polling_spec: Some(PollingSpec {
+                rates_hz: vec![125, 250, 500, 1000],
+            }),
             polling: Some(1000),
             actuation_spec: Some(ActuationSpec {
                 min_mm: 0.1,
@@ -68,14 +73,20 @@ impl DpiCapability for MockDriver {
 
     async fn set_dpi(&mut self, dpi: u16) -> Result<()> {
         if !self.writable {
-            return Err(DriverError::Unsupported("mock is read-only"));
+            return Err(DriverError::Unsupported {
+                capability: "DPI".into(),
+                backend_id: "mock".into(),
+            });
         }
         if !self
             .dpi_spec
             .as_ref()
-            .is_some_and(|spec| spec.values.contains(&dpi))
+            .is_some_and(|spec| spec.presets.contains(&dpi))
         {
-            return Err(DriverError::InvalidArgument(format!("{dpi} DPI")));
+            return Err(DriverError::InvalidArgument {
+                field: "dpi".into(),
+                reason: format!("{dpi} DPI"),
+            });
         }
         self.dpi = Some(dpi);
         Ok(())
@@ -94,14 +105,20 @@ impl PollingRateCapability for MockDriver {
 
     async fn set_polling_rate(&mut self, hz: u16) -> Result<()> {
         if !self.writable {
-            return Err(DriverError::Unsupported("mock is read-only"));
+            return Err(DriverError::Unsupported {
+                capability: "polling rate".into(),
+                backend_id: "mock".into(),
+            });
         }
         if !self
             .polling_spec
             .as_ref()
-            .is_some_and(|spec| spec.rates.contains(&hz))
+            .is_some_and(|spec| spec.rates_hz.contains(&hz))
         {
-            return Err(DriverError::InvalidArgument(format!("{hz} Hz")));
+            return Err(DriverError::InvalidArgument {
+                field: "polling".into(),
+                reason: format!("{hz} Hz"),
+            });
         }
         self.polling = Some(hz);
         Ok(())
@@ -120,16 +137,27 @@ impl ActuationCapability for MockDriver {
 
     async fn set_actuation(&mut self, millimetres: f32) -> Result<()> {
         if !self.writable {
-            return Err(DriverError::Unsupported("mock is read-only"));
+            return Err(DriverError::Unsupported {
+                capability: "actuation".into(),
+                backend_id: "mock".into(),
+            });
         }
         let spec = self
             .actuation_spec
             .as_ref()
-            .ok_or(DriverError::Unsupported("actuation"))?;
+            .ok_or(DriverError::Unsupported {
+                capability: "actuation".into(),
+                backend_id: "mock".into(),
+            })?;
         if !millimetres.is_finite() {
-            return Err(DriverError::InvalidArgument("actuation".into()));
+            return Err(DriverError::InvalidArgument {
+                field: "actuation".into(),
+                reason: "actuation".into(),
+            });
         }
-        self.actuation = Some(spec.clamp(millimetres));
+        let clamped = millimetres.clamp(spec.min_mm, spec.max_mm);
+        let steps = ((clamped - spec.min_mm) / spec.step_mm).round();
+        self.actuation = Some((spec.min_mm + steps * spec.step_mm).clamp(spec.min_mm, spec.max_mm));
         Ok(())
     }
 }
@@ -140,13 +168,18 @@ impl PeripheralDriver for MockDriver {
         &self.key
     }
 
-    fn capabilities(&self) -> CapabilitySet {
-        CapabilitySet {
-            dpi: self.dpi_spec.is_some(),
-            polling_rate: self.polling_spec.is_some(),
-            actuation: self.actuation_spec.is_some(),
-            macros: false,
+    fn capabilities(&self) -> Capabilities {
+        let mut caps = Capabilities::empty();
+        if self.dpi_spec.is_some() {
+            caps.insert(Capabilities::DPI);
         }
+        if self.polling_spec.is_some() {
+            caps.insert(Capabilities::POLLING_RATE);
+        }
+        if self.actuation_spec.is_some() {
+            caps.insert(Capabilities::ACTUATION);
+        }
+        caps
     }
 
     async fn read_battery(&mut self) -> Result<BatteryReport> {

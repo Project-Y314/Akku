@@ -1,0 +1,42 @@
+schema = 1
+id = "epomaker-p65"
+name = "Epomaker P65 (experimental)"
+vendor = "Epomaker"
+kind = "keyboard"
+connection = "usb_receiver"
+transport = "via_raw"
+writes_verified = false
+notes = "VIA raw HID on usage page 0xFF60 / usage 0x61."
+
+[[match]]
+vid = 0x320F
+pid = 0x5055
+usage_page = 0xFF60
+usage = 0x0061
+
+[[match]]
+vid = 0x19F5
+pid = 0x1029
+usage_page = 0xFF60
+usage = 0x0061
+
+[battery]
+report_id = 0x00
+report_len = 65
+offset = 1
+width = 1
+encoding = "percent"
+
+[actuation]
+report_id = 0x00
+report_len = 65
+offset = 2
+min_mm = 0.1
+max_mm = 4.0
+step_mm = 0.1
+
+[polling]
+report_id = 0x00
+report_len = 65
+offset = 4
+rates = [125, 250, 500, 1000]

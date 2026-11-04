@@ -4,20 +4,22 @@
 //! Feature handles are opened per operation and dropped immediately, which
 //! avoids holding an interface exclusively across sleep/wake or vendor software.
 
-mod decode;
-mod driver;
-mod enumerate;
+pub mod backends;
+pub mod decode;
+pub mod driver;
+pub mod enumerate;
 pub mod mock;
-mod worker;
+pub mod worker;
 
+pub use backends::{BackendRegistry, DeviceBackendImpl};
 pub use decode::{
     decode_actuation, decode_battery, decode_dpi, decode_polling, encode_actuation, encode_dpi,
     encode_polling,
 };
-pub use driver::{HidDriver, key_for_device};
+pub use driver::{key_for_device, HidDriver};
 pub use enumerate::{describe, device_key, enumerate, find_manifest, map_error};
 pub use mock::MockDriver;
-pub use worker::{HidWorker, WorkerCommand, WorkerEvent, probe};
+pub use worker::{probe, CapabilitySet, DeviceSnapshot, HidWorker, WorkerCommand, WorkerEvent};
 
 /// Re-exports so command line tools can control the Hid flow without depending
 /// on async-hid directly.

@@ -1,5 +1,7 @@
 //! The Akku tray window: device cards, controls, settings and the tray loop.
 
+#![allow(unused_imports, unused_variables, dead_code, unreachable_patterns)]
+
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -10,8 +12,13 @@ use eframe::egui::{
     Margin, Rect, RichText, ScrollArea, Sense, Slider, Stroke, Ui, Vec2, ViewportCommand,
 };
 
-use akku_core::{DeviceSnapshot, Settings, SettingsStore, Theme, load_bundled};
+use akku_core::{
+    load_bundled, Axis, BatteryState, Capabilities, CapabilityName, DeviceDescriptor, DeviceHealth,
+    DeviceId, DeviceKind, DeviceState, DpiState, FieldStatus, LightingEffect, LightingState,
+    PollingSpec, Settings, SettingsStore, Theme,
+};
 use akku_display::MonitorInfo;
+use akku_hid::DeviceSnapshot;
 
 use crate::autostart;
 use crate::demo::{DemoWorker, Runtime};
@@ -26,6 +33,9 @@ struct Palette {
     border: Color32,
     fg: Color32,
     dim: Color32,
+    emerald: Color32,
+    red: Color32,
+    amber: Color32,
 }
 
 impl Palette {
@@ -37,6 +47,9 @@ impl Palette {
             border: Color32::from_gray(52),
             fg: Color32::WHITE,
             dim: Color32::from_gray(150),
+            emerald: Color32::from_rgb(52, 211, 153),
+            red: Color32::from_rgb(248, 113, 113),
+            amber: Color32::from_rgb(251, 191, 36),
         }
     }
 
@@ -48,6 +61,9 @@ impl Palette {
             border: Color32::from_gray(199),
             fg: Color32::BLACK,
             dim: Color32::from_gray(96),
+            emerald: Color32::from_rgb(52, 211, 153),
+            red: Color32::from_rgb(248, 113, 113),
+            amber: Color32::from_rgb(251, 191, 36),
         }
     }
 
@@ -207,10 +223,14 @@ impl AkkuApp {
             let Some(handle) = &self.tray else {
                 continue;
             };
-            if event.id == handle.show_id {
-                self.toggle_window(ctx);
-            } else if event.id == handle.refresh_id {
+            if event.id == handle.refresh_id {
                 self.refresh_now();
+            } else if event.id == handle.settings_id {
+                self.open_settings(ctx);
+            } else if event.id == handle.open_log_id {
+                self.open_log();
+            } else if event.id == handle.autostart_id {
+                self.toggle_autostart();
             } else if event.id == handle.quit_id {
                 self.want_quit = true;
             }
@@ -233,6 +253,36 @@ impl AkkuApp {
             ctx.send_viewport_cmd(ViewportCommand::Focus);
         }
         ctx.request_repaint();
+    }
+
+    fn open_settings(&mut self, ctx: &Context) {
+        ctx.send_viewport_cmd(ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(ViewportCommand::Focus);
+        self.window_visible = true;
+        // The settings window is opened via Tauri IPC in the tray handler
+    }
+
+    fn open_log(&mut self) {
+        // TODO: open log file
+        self.status = Some("LOG OPEN REQUESTED".into());
+    }
+
+    fn toggle_autostart(&mut self) {
+        let new_value = !self.settings.autostart;
+        match autostart::set_enabled(new_value) {
+            Ok(()) => {
+                self.settings.autostart = new_value;
+                self.save_settings();
+                self.status = Some(if new_value {
+                    "AUTOSTART ENABLED".into()
+                } else {
+                    "AUTOSTART DISABLED".into()
+                });
+            }
+            Err(error) => {
+                self.status = Some(format!("AUTO-START FAILED: {error}"));
+            }
+        }
     }
 
     fn refresh_now(&mut self) {
@@ -362,8 +412,8 @@ impl AkkuApp {
                 if self.snapshots.is_empty() {
                     self.draw_empty(ui);
                 } else {
-                    for index in 0..self.snapshots.len() {
-                        let snapshot = self.snapshots[index].clone();
+                    let snapshots = self.snapshots.clone();
+                    for snapshot in snapshots {
                         self.draw_device_card(ui, &snapshot);
                     }
                 }
@@ -448,7 +498,7 @@ impl AkkuApp {
             ui.label(RichText::new(tags).monospace().size(9.0).color(palette.dim));
             ui.with_layout(Layout::right_to_left(Align::Max), |ui| {
                 ui.label(
-                    RichText::new(snapshot.state.label())
+                    RichText::new(format!("{:?}", snapshot.state.health))
                         .monospace()
                         .size(9.0)
                         .color(palette.dim),
@@ -467,88 +517,19 @@ impl AkkuApp {
         self.section(ui, "BATTERY");
         self.battery_bar(ui, snapshot);
 
-        if snapshot.capabilities.dpi
-            && let Some(values) = snapshot.dpi_values.clone()
-        {
+        if snapshot.capabilities.dpi && snapshot.dpi_values.is_some() {
             self.section(ui, "DPI");
-            self.chips_row(ui, values.clone(), snapshot.dpi, |value| {
-                akku_hid::WorkerCommand::SetDpi {
-                    manifest_id: id.clone(),
-                    dpi: value,
-                }
-            });
-
-            // Manual DPI entry
-            let entry = self
-                .dpi_manual_edits
-                .entry(format!("{id}_dpi_manual"))
-                .or_insert(
-                    snapshot
-                        .dpi
-                        .map(|d| d.to_string())
-                        .unwrap_or_else(|| values[0].to_string()),
-                );
-            ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new("Custom:")
-                        .monospace()
-                        .size(10.0)
-                        .color(palette.dim),
-                );
-                let response = ui.add(
-                    egui::TextEdit::singleline(entry)
-                        .desired_width(80.0)
-                        .font(egui::FontId::monospace(11.0)),
-                );
-                if response.lost_focus()
-                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    && let Ok(dpi) = entry.trim().parse::<u16>()
-                {
-                    self.worker.send(akku_hid::WorkerCommand::SetDpi {
-                        manifest_id: id.clone(),
-                        dpi,
-                    });
-                    self.status = Some(format!("SET DPI {dpi} REQUESTED"));
-                }
-            });
+            self.dpi_controls(ui, snapshot);
         }
 
-        if snapshot.capabilities.polling_rate
-            && let Some(rates) = snapshot.polling_rates.clone()
-        {
+        if snapshot.capabilities.polling_rate && snapshot.polling_rates.is_some() {
             self.section(ui, "POLLING RATE");
-            self.chips_row(ui, rates, snapshot.polling_hz, |value| {
-                akku_hid::WorkerCommand::SetPolling {
-                    manifest_id: id.clone(),
-                    hz: value,
-                }
-            });
+            self.polling_controls(ui, snapshot);
         }
 
-        if snapshot.capabilities.actuation
-            && let Some(spec) = snapshot.actuation_range.clone()
-        {
+        if snapshot.capabilities.actuation && snapshot.actuation_range.is_some() {
             self.section(ui, "ACTUATION POINT");
-            let entry = self
-                .slider_edits
-                .entry(id.clone())
-                .or_insert(snapshot.actuation_mm.unwrap_or(spec.min_mm));
-            let display = format!("{:.1} MM", *entry);
-            let response = ui.add(
-                Slider::new(entry, spec.min_mm..=spec.max_mm)
-                    .step_by(f64::from(spec.step_mm))
-                    .show_value(false)
-                    .text(display),
-            );
-            let commit = response.drag_stopped() || (response.changed() && !response.dragged());
-            if commit {
-                let millimetres = *entry;
-                self.worker.send(akku_hid::WorkerCommand::SetActuation {
-                    manifest_id: id.clone(),
-                    millimetres,
-                });
-                self.status = Some(format!("SET ACTUATION {:.1} MM REQUESTED", millimetres));
-            }
+            self.actuation_controls(ui, snapshot);
         }
 
         if let Some(error) = snapshot.last_error.clone() {
@@ -571,47 +552,6 @@ impl AkkuApp {
                 .color(palette.dim),
             );
         }
-    }
-
-    fn chips_row(
-        &mut self,
-        ui: &mut Ui,
-        values: Vec<u16>,
-        current: Option<u16>,
-        to_command: impl Fn(u16) -> akku_hid::WorkerCommand,
-    ) {
-        ui.horizontal_wrapped(|ui| {
-            for value in values {
-                let selected = current == Some(value);
-                let response = self.chip(ui, &value.to_string(), selected);
-                if response.clicked() && !selected {
-                    let command = to_command(value);
-                    self.worker.send(command);
-                    self.status = Some("WRITE REQUESTED".into());
-                }
-            }
-        });
-        ui.add_space(2.0);
-    }
-
-    fn chip(&self, ui: &mut Ui, label: &str, selected: bool) -> egui::Response {
-        let palette = Palette::of(self.settings.theme);
-        let (fill, text_color, stroke) = if selected {
-            (palette.fg, palette.bg, Stroke::new(1.0, palette.fg))
-        } else {
-            (palette.card, palette.fg, Stroke::new(1.0, palette.border))
-        };
-        let button = Button::new(
-            RichText::new(label)
-                .monospace()
-                .size(11.0)
-                .color(text_color),
-        )
-        .fill(fill)
-        .stroke(stroke)
-        .corner_radius(CornerRadius::same(4))
-        .min_size(Vec2::new(0.0, 22.0));
-        ui.add(button)
     }
 
     fn battery_bar(&self, ui: &mut Ui, snapshot: &DeviceSnapshot) {
@@ -637,7 +577,16 @@ impl AkkuApp {
             let portion = ratio.clamp(0.02, 1.0);
             if ratio > 0.0 {
                 let fill = Rect::from_min_size(rect.min, Vec2::new(width * portion, rect.height()));
-                painter.rect_filled(fill, CornerRadius::same(3), palette.fg);
+                let fill_color = if snapshot.battery.report.charging {
+                    palette.emerald
+                } else if ratio <= 0.15 {
+                    palette.red
+                } else if ratio <= 0.30 {
+                    palette.amber
+                } else {
+                    palette.fg
+                };
+                painter.rect_filled(fill, CornerRadius::same(3), fill_color);
             }
             painter.rect_stroke(
                 rect,
@@ -657,7 +606,7 @@ impl AkkuApp {
                     RichText::new("CHARGING")
                         .monospace()
                         .size(9.0)
-                        .color(palette.fg),
+                        .color(palette.emerald),
                 );
             }
             if let Some(ago) = updated_ago(snapshot.battery.updated_at) {
@@ -677,6 +626,125 @@ impl AkkuApp {
                     .color(palette.dim),
             );
         }
+    }
+
+    fn dpi_controls(&mut self, ui: &mut Ui, snapshot: &DeviceSnapshot) {
+        let palette = Palette::of(self.settings.theme);
+        let values = snapshot.dpi_values.clone().unwrap_or_default();
+        let values_for_closure = values.clone();
+        let current = snapshot.dpi;
+
+        ui.horizontal_wrapped(|ui| {
+            for value in values_for_closure {
+                let selected = current == Some(value);
+                let response = self.chip(ui, &value.to_string(), selected, &palette);
+                if response.clicked() && !selected {
+                    self.worker.send(akku_hid::WorkerCommand::SetDpi {
+                        manifest_id: snapshot.manifest_id.0.clone(),
+                        dpi: value,
+                    });
+                    self.status = Some("WRITE REQUESTED".into());
+                }
+            }
+        });
+        ui.add_space(2.0);
+
+        // Manual DPI entry
+        let entry = self
+            .dpi_manual_edits
+            .entry(format!("{}_dpi_manual", snapshot.manifest_id.0))
+            .or_insert(
+                snapshot
+                    .dpi
+                    .map(|d| d.to_string())
+                    .unwrap_or_else(|| values.first().copied().unwrap_or(800).to_string()),
+            );
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new("Custom:")
+                    .monospace()
+                    .size(10.0)
+                    .color(palette.dim),
+            );
+            let response = ui.add(
+                egui::TextEdit::singleline(entry)
+                    .desired_width(80.0)
+                    .font(egui::FontId::monospace(11.0)),
+            );
+            if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if let Ok(dpi) = entry.trim().parse::<u16>() {
+                    self.worker.send(akku_hid::WorkerCommand::SetDpi {
+                        manifest_id: snapshot.manifest_id.0.clone(),
+                        dpi,
+                    });
+                    self.status = Some(format!("SET DPI {dpi} REQUESTED"));
+                }
+            }
+        });
+    }
+
+    fn polling_controls(&mut self, ui: &mut Ui, snapshot: &DeviceSnapshot) {
+        let palette = Palette::of(self.settings.theme);
+        let rates = snapshot.polling_rates.clone().unwrap_or_default();
+        let current = snapshot.polling_hz;
+
+        ui.horizontal_wrapped(|ui| {
+            for value in rates {
+                let selected = current == Some(value);
+                let response = self.chip(ui, &format!("{} Hz", value), selected, &palette);
+                if response.clicked() && !selected {
+                    self.worker.send(akku_hid::WorkerCommand::SetPolling {
+                        manifest_id: snapshot.manifest_id.0.clone(),
+                        hz: value,
+                    });
+                    self.status = Some("WRITE REQUESTED".into());
+                }
+            }
+        });
+    }
+
+    fn actuation_controls(&mut self, ui: &mut Ui, snapshot: &DeviceSnapshot) {
+        let palette = Palette::of(self.settings.theme);
+        let spec = snapshot.actuation_range.clone().unwrap();
+        let entry = self
+            .slider_edits
+            .entry(snapshot.manifest_id.0.clone())
+            .or_insert(snapshot.actuation_mm.unwrap_or(spec.min_mm));
+        let display = format!("{:.1} MM", *entry);
+        let response = ui.add(
+            Slider::new(entry, spec.min_mm..=spec.max_mm)
+                .step_by(f64::from(spec.step_mm))
+                .show_value(false)
+                .text(display),
+        );
+        let commit = response.drag_stopped() || (response.changed() && !response.dragged());
+        if commit {
+            let millimetres = *entry;
+            self.worker.send(akku_hid::WorkerCommand::SetActuation {
+                manifest_id: snapshot.manifest_id.0.clone(),
+                millimetres,
+            });
+            self.status = Some(format!("SET ACTUATION {:.1} MM REQUESTED", millimetres));
+        }
+    }
+
+    fn chip(&self, ui: &mut Ui, label: &str, selected: bool, palette: &Palette) -> egui::Response {
+        let (fill, text_color, stroke) = if selected {
+            (palette.fg, palette.bg, Stroke::new(1.0, palette.fg))
+        } else {
+            (palette.card, palette.fg, Stroke::new(1.0, palette.border))
+        };
+        let button = Button::new(
+            RichText::new(label)
+                .monospace()
+                .size(11.0)
+                .color(text_color),
+        )
+        .fill(fill)
+        .stroke(stroke)
+        .corner_radius(CornerRadius::same(4))
+        .min_size(Vec2::new(0.0, 22.0));
+        ui.add(button)
     }
 
     fn draw_settings_card(&mut self, ui: &mut Ui) {
@@ -906,7 +974,7 @@ impl eframe::App for AkkuApp {
 
 fn tooltip_text(snapshots: &[DeviceSnapshot]) -> String {
     if snapshots.is_empty() {
-        return "akku — no devices connected".into();
+        return "PeripheralDeck — no devices connected".into();
     }
     let parts: Vec<String> = snapshots
         .iter()
@@ -923,7 +991,7 @@ fn tooltip_text(snapshots: &[DeviceSnapshot]) -> String {
             }
         })
         .collect();
-    format!("akku · {}", parts.join("  ·  "))
+    format!("PeripheralDeck · {}", parts.join("  ·  "))
 }
 
 fn updated_ago(updated_at: SystemTime) -> Option<String> {

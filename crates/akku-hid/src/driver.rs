@@ -1,6 +1,10 @@
+//! HID driver using the new `DeviceBackend` trait.
+
+#![allow(unused_imports)]
+
 use akku_core::{
-    ActuationCapability, ActuationSpec, BatteryReport, CapabilitySet, DeviceKey, DpiCapability,
-    DpiSpec, DriverError, Manifest, PeripheralDriver, PollingRateCapability, PollingSpec, Result,
+    Axis, BatteryReport, Capabilities, DeviceKey, DpiSpec, DriverError, Manifest, PeripheralDriver,
+    PollingSpec, Result,
 };
 use async_hid::{AsyncHidFeatureHandle, Device};
 use async_trait::async_trait;
@@ -78,12 +82,16 @@ impl HidDriver {
 
     async fn write_feature(&self, mut buffer: Vec<u8>) -> Result<()> {
         if !self.manifest.writes_verified {
-            return Err(DriverError::Unsupported(
-                "writes are disabled until a real hardware capture is verified",
-            ));
+            return Err(DriverError::Unsupported {
+                capability: "write".into(),
+                backend_id: "hid".into(),
+            });
         }
         if buffer.is_empty() {
-            return Err(DriverError::InvalidArgument("empty feature report".into()));
+            return Err(DriverError::InvalidArgument {
+                field: "buffer".into(),
+                reason: "empty feature report".into(),
+            });
         }
         let mut handle = self
             .device
@@ -102,14 +110,17 @@ impl HidDriver {
 fn map_hid_error(error: async_hid::HidError) -> DriverError {
     let message = error.to_string();
     if message.contains("Access is denied") || message.contains("0x80070005") {
-        DriverError::DeviceBusy
+        DriverError::DeviceBusy {
+            device_id: "unknown".into(),
+            retries_attempted: 0,
+        }
     } else {
-        DriverError::Transport(message)
+        DriverError::Transport { message }
     }
 }
 
 #[async_trait]
-impl DpiCapability for HidDriver {
+impl akku_core::DpiCapability for HidDriver {
     fn dpi_spec(&self) -> Option<DpiSpec> {
         self.manifest
             .dpi
@@ -126,11 +137,10 @@ impl DpiCapability for HidDriver {
     }
 
     async fn set_dpi(&mut self, dpi: u16) -> Result<()> {
-        let descriptor = self
-            .manifest
-            .dpi
-            .clone()
-            .ok_or(DriverError::Unsupported("DPI"))?;
+        let descriptor = self.manifest.dpi.clone().ok_or(DriverError::Unsupported {
+            capability: "DPI".into(),
+            backend_id: "hid".into(),
+        })?;
         let mut buffer = vec![0u8; descriptor.report_len];
         encode_dpi(&mut buffer, &descriptor, dpi)?;
         self.write_feature(buffer).await
@@ -138,7 +148,7 @@ impl DpiCapability for HidDriver {
 }
 
 #[async_trait]
-impl PollingRateCapability for HidDriver {
+impl akku_core::PollingRateCapability for HidDriver {
     fn polling_spec(&self) -> Option<PollingSpec> {
         self.manifest
             .polling
@@ -159,7 +169,10 @@ impl PollingRateCapability for HidDriver {
             .manifest
             .polling
             .clone()
-            .ok_or(DriverError::Unsupported("polling rate"))?;
+            .ok_or(DriverError::Unsupported {
+                capability: "polling rate".into(),
+                backend_id: "hid".into(),
+            })?;
         let mut buffer = vec![0u8; descriptor.report_len];
         encode_polling(&mut buffer, &descriptor, hz)?;
         self.write_feature(buffer).await
@@ -167,8 +180,8 @@ impl PollingRateCapability for HidDriver {
 }
 
 #[async_trait]
-impl ActuationCapability for HidDriver {
-    fn actuation_spec(&self) -> Option<ActuationSpec> {
+impl akku_core::ActuationCapability for HidDriver {
+    fn actuation_spec(&self) -> Option<akku_core::ActuationSpec> {
         self.manifest
             .actuation
             .as_ref()
@@ -188,7 +201,10 @@ impl ActuationCapability for HidDriver {
             .manifest
             .actuation
             .clone()
-            .ok_or(DriverError::Unsupported("actuation"))?;
+            .ok_or(DriverError::Unsupported {
+                capability: "actuation".into(),
+                backend_id: "hid".into(),
+            })?;
         let mut buffer = vec![0u8; descriptor.report_len];
         encode_actuation(&mut buffer, &descriptor, millimetres)?;
         self.write_feature(buffer).await
@@ -201,13 +217,18 @@ impl PeripheralDriver for HidDriver {
         &self.key
     }
 
-    fn capabilities(&self) -> CapabilitySet {
-        CapabilitySet {
-            dpi: self.manifest.dpi.is_some(),
-            polling_rate: self.manifest.polling.is_some(),
-            actuation: self.manifest.actuation.is_some(),
-            macros: false,
+    fn capabilities(&self) -> Capabilities {
+        let mut caps = Capabilities::empty();
+        if self.manifest.dpi.is_some() {
+            caps.insert(Capabilities::DPI);
         }
+        if self.manifest.polling.is_some() {
+            caps.insert(Capabilities::POLLING_RATE);
+        }
+        if self.manifest.actuation.is_some() {
+            caps.insert(Capabilities::ACTUATION);
+        }
+        caps
     }
 
     async fn read_battery(&mut self) -> Result<BatteryReport> {
@@ -215,7 +236,10 @@ impl PeripheralDriver for HidDriver {
             .manifest
             .battery
             .clone()
-            .ok_or(DriverError::Unsupported("battery"))?;
+            .ok_or(DriverError::Unsupported {
+                capability: "battery".into(),
+                backend_id: "hid".into(),
+            })?;
         let report = self.read_feature(descriptor.report_id).await?;
         decode_battery(&report, &descriptor)
     }
@@ -234,3 +258,6 @@ pub fn key_for_device(_manifest: &Manifest, device: &Device) -> DeviceKey {
         serial: device.serial_number.clone(),
     }
 }
+
+// Re-export the old capability traits for compatibility
+pub use akku_core::{ActuationCapability, DpiCapability, PollingRateCapability};

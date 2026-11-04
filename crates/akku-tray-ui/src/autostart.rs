@@ -13,8 +13,8 @@ fn command_line() -> Result<String, String> {
 #[cfg(windows)]
 mod imp {
     use windows_sys::Win32::System::Registry::{
-        HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ, RegCloseKey, RegDeleteValueW, RegOpenKeyExW,
-        RegSetValueExW,
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY_CURRENT_USER,
+        KEY_SET_VALUE, REG_SZ,
     };
 
     use super::{RUN_KEY, VALUE_NAME};

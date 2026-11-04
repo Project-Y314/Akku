@@ -2,6 +2,11 @@
 //!
 //! Pure white-on-transparent glyphs: battery (with level), keyboard, mouse,
 //! and a generic device. Used for per-device tray tooltips and the window.
+//!
+//! The wide/long tray pill (64x22 and 32x32 compact) is now rendered in
+//! `akku_core::tray_pill::TrayPillRenderer`.
+
+#![allow(dead_code, unreachable_patterns)]
 
 pub const SIZE: u32 = 32;
 

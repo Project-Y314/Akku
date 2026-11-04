@@ -1,31 +1,47 @@
-//! Core contracts shared by the Akku application, drivers and command line tools.
+//! Core domain types, capability bitflags, error hierarchy, `DeviceBackend` trait,
+//! capability-gating middleware, and procedural wide tray pill renderer for PeripheralDeck.
 //!
-//! This crate deliberately contains no Windows API calls. It owns the device model,
-//! the driver traits, manifest validation, and the pure math used by the UI.
+//! This crate is 100% platform-independent so unit tests and protocol parsers run
+//! deterministically on any host without touching OS HID handles.
 
-mod actuation;
-mod capability;
-mod discharge;
-mod error;
-mod ids;
-mod manifest;
-mod model;
-mod settings;
+pub mod actuation;
+pub mod backend;
+pub mod capabilities;
+pub mod error;
+pub mod ids;
+pub mod manifest;
+pub mod model;
+pub mod settings;
+pub mod tray_pill;
 
-pub use actuation::{DeadzoneLayer, effective_actuation};
-pub use capability::{
-    ActuationCapability, ActuationSpec, DpiCapability, DpiSpec, MacroCapability, PeripheralDriver,
-    PollingRateCapability, PollingSpec,
-};
-pub use discharge::{DischargeSample, DischargeTracker};
-pub use error::{DriverError, Result};
+pub use actuation::effective_actuation;
+pub use backend::{CapabilityGatedBackend, DeviceBackend, NotImplementedBackend};
+pub use capabilities::{Capabilities, CapabilityName};
+pub use error::{DeckError, DriverError, Result};
 pub use ids::{DeviceKey, ManifestId};
 pub use manifest::{
-    ActuationDescriptor, BatteryDescriptor, BatteryEncoding, ConnectionKind, DeviceKind,
-    DpiDescriptor, DpiEncoding, Manifest, ManifestMatch, PollingDescriptor, TransportKind,
-    load_bundled, load_dir, parse_manifest,
+    load_bundled, load_dir, parse_manifest, ActuationDescriptor, BatteryDescriptor,
+    BatteryEncoding, ConnectionKind, DeviceKind, DpiDescriptor, DpiEncoding, Manifest,
+    ManifestMatch, PollingDescriptor, TransportKind,
 };
 pub use model::{
-    BatteryReport, BatterySnapshot, CapabilitySet, DeviceSnapshot, DeviceState, Settings, Theme,
+    ActuationCapability, ActuationSpec, Axis, BatteryReport, BatteryState,
+    Capabilities as ModelCapabilities, ConnectionKind as ModelConnectionKind, DebounceSpec,
+    DeviceDescriptor, DeviceHealth, DeviceId, DeviceKind as ModelDeviceKind, DeviceState,
+    DpiCapability, DpiSpec, DpiState, FieldStatus, LiftoffSpec, LightingEffect, LightingState,
+    PeripheralDriver, PollingRateCapability, PollingSpec, ProfileId, RgbColor, SettingKey,
+    SettingValue, Settings, Theme,
 };
-pub use settings::{SettingsStore, default_settings_path};
+pub use settings::{default_settings_path, SettingsStore};
+pub use tray_pill::{
+    PopoverAnimationFrame, TrayAnimationController, TrayBadgeState, TrayPillDimensions,
+    TrayPillRenderer,
+};
+
+// Re-export capability traits and spec types from model
+pub mod capability {
+    pub use crate::model::{
+        ActuationCapability, ActuationSpec, Capabilities, CapabilityName, DpiCapability, DpiSpec,
+        PollingRateCapability, PollingSpec,
+    };
+}

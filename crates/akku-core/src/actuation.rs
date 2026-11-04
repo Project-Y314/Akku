@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::capability::ActuationSpec;
-use crate::error::{DriverError, Result};
+use crate::error::{DeckError as DriverError, Result};
+use crate::model::ActuationSpec;
 
 /// One additive actuation overlay. Layers are applied in priority order, then
 /// clamped once to the physical travel range.
@@ -22,9 +22,10 @@ pub fn effective_actuation(
     layers: &[DeadzoneLayer],
 ) -> Result<f32> {
     if !base_mm.is_finite() {
-        return Err(DriverError::InvalidArgument(
-            "base actuation must be finite".into(),
-        ));
+        return Err(DriverError::InvalidArgument {
+            field: "base_mm".into(),
+            reason: "base actuation must be finite".into(),
+        });
     }
     if !spec.min_mm.is_finite()
         || !spec.max_mm.is_finite()
@@ -33,9 +34,10 @@ pub fn effective_actuation(
         || spec.max_mm <= spec.min_mm
         || spec.step_mm <= 0.0
     {
-        return Err(DriverError::InvalidArgument(
-            "actuation range is invalid".into(),
-        ));
+        return Err(DriverError::InvalidArgument {
+            field: "actuation_spec".into(),
+            reason: "actuation range is invalid".into(),
+        });
     }
 
     let mut ordered = layers.to_vec();
@@ -44,18 +46,19 @@ pub fn effective_actuation(
     let mut value = base_mm;
     for layer in &ordered {
         if !layer.delta_mm.is_finite() {
-            return Err(DriverError::InvalidArgument(format!(
-                "deadzone layer {} has a non-finite delta",
-                layer.id
-            )));
+            return Err(DriverError::InvalidArgument {
+                field: "deadzone_layer".into(),
+                reason: format!("deadzone layer {} has a non-finite delta", layer.id),
+            });
         }
         value += layer.delta_mm;
     }
 
     if !value.is_finite() {
-        return Err(DriverError::InvalidArgument(
-            "actuation stacking overflowed".into(),
-        ));
+        return Err(DriverError::InvalidArgument {
+            field: "actuation".into(),
+            reason: "actuation stacking overflowed".into(),
+        });
     }
 
     let clamped = value.clamp(spec.min_mm, spec.max_mm);
@@ -119,18 +122,16 @@ mod tests {
     #[test]
     fn rejects_invalid_inputs() {
         assert!(effective_actuation(f32::NAN, &spec(), &[]).is_err());
-        assert!(
-            effective_actuation(
-                1.0,
-                &spec(),
-                &[DeadzoneLayer {
-                    id: "bad".into(),
-                    priority: 0,
-                    delta_mm: f32::INFINITY,
-                }]
-            )
-            .is_err()
-        );
+        assert!(effective_actuation(
+            1.0,
+            &spec(),
+            &[DeadzoneLayer {
+                id: "bad".into(),
+                priority: 0,
+                delta_mm: f32::INFINITY,
+            }]
+        )
+        .is_err());
     }
 
     #[test]

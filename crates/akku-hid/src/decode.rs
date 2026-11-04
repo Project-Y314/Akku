@@ -1,14 +1,18 @@
 use akku_core::{
-    BatteryDescriptor, BatteryEncoding, BatteryReport, DpiDescriptor, DpiEncoding, DriverError,
-    PollingDescriptor, Result,
+    BatteryDescriptor, BatteryEncoding, BatteryReport, DeckError as DriverError, DpiDescriptor,
+    DpiEncoding, PollingDescriptor, Result,
 };
 
 fn read_uint_le(bytes: &[u8], offset: usize, width: usize) -> Result<u32> {
     if width == 0 || width > 4 || offset + width > bytes.len() {
-        return Err(DriverError::Protocol(format!(
-            "field at {offset} with width {width} does not fit {} bytes",
-            bytes.len()
-        )));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: format!(
+                "field at {offset} with width {width} does not fit {} bytes",
+                bytes.len()
+            ),
+            reference_url: None,
+        });
     }
     let mut value = 0u32;
     for (shift, byte) in bytes[offset..offset + width].iter().enumerate() {
@@ -19,9 +23,11 @@ fn read_uint_le(bytes: &[u8], offset: usize, width: usize) -> Result<u32> {
 
 fn write_uint_le(bytes: &mut [u8], offset: usize, width: usize, value: u32) -> Result<()> {
     if width == 0 || width > 4 || offset + width > bytes.len() {
-        return Err(DriverError::Protocol(
-            "write field does not fit report".into(),
-        ));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: "write field does not fit report".into(),
+            reference_url: None,
+        });
     }
     for index in 0..width {
         bytes[offset + index] = ((value >> (index * 8)) & 0xFF) as u8;
@@ -31,19 +37,21 @@ fn write_uint_le(bytes: &mut [u8], offset: usize, width: usize, value: u32) -> R
 
 pub fn decode_battery(bytes: &[u8], descriptor: &BatteryDescriptor) -> Result<BatteryReport> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
-        return Err(DriverError::Protocol(format!(
-            "expected report id {:#04X}, got {:?}",
-            descriptor.report_id,
-            bytes.first()
-        )));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: format!(
+                "expected report id {:#04X}, got {:?}",
+                descriptor.report_id,
+                bytes.first()
+            ),
+            reference_url: None,
+        });
     }
     let raw = read_uint_le(bytes, descriptor.offset, descriptor.width)?;
     let percent = match descriptor.encoding {
         BatteryEncoding::Percent => Some(raw.min(100) as u8),
         BatteryEncoding::PercentInverted => Some(100u32.saturating_sub(raw.min(100)) as u8),
         BatteryEncoding::VoltageMv => {
-            // Most wireless peripherals expose a 1S cell. This is a display
-            // estimate only; the raw voltage is always retained.
             let voltage = raw as f32;
             let percent = ((voltage - 3000.0) / 1200.0 * 100.0).clamp(0.0, 100.0);
             Some(percent.round() as u8)
@@ -65,27 +73,43 @@ pub fn decode_battery(bytes: &[u8], descriptor: &BatteryDescriptor) -> Result<Ba
 
 pub fn decode_dpi(bytes: &[u8], descriptor: &DpiDescriptor) -> Result<u16> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
-        return Err(DriverError::Protocol("unexpected DPI report id".into()));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: "unexpected DPI report id".into(),
+            reference_url: None,
+        });
     }
-    let value =
-        match descriptor.encoding {
-            DpiEncoding::IndexU8 => {
-                let index = *bytes
-                    .get(descriptor.offset)
-                    .ok_or_else(|| DriverError::Protocol("DPI index missing".into()))?
-                    as usize;
-                descriptor.values.get(index).copied().ok_or_else(|| {
-                    DriverError::Protocol(format!("DPI index {index} out of range"))
+    let value = match descriptor.encoding {
+        DpiEncoding::IndexU8 => {
+            let index = *bytes
+                .get(descriptor.offset)
+                .ok_or_else(|| DriverError::Protocol {
+                    backend_id: "decode".into(),
+                    message: "DPI index missing".into(),
+                    reference_url: None,
+                })? as usize;
+            descriptor
+                .values
+                .get(index)
+                .copied()
+                .ok_or_else(|| DriverError::Protocol {
+                    backend_id: "decode".into(),
+                    message: format!("DPI index {index} out of range"),
+                    reference_url: None,
                 })?
-            }
-            DpiEncoding::U16Le => read_uint_le(bytes, descriptor.offset, 2)? as u16,
-        };
+        }
+        DpiEncoding::U16Le => read_uint_le(bytes, descriptor.offset, 2)? as u16,
+    };
     Ok(nearest(&descriptor.values, value))
 }
 
 pub fn decode_polling(bytes: &[u8], descriptor: &PollingDescriptor) -> Result<u16> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
-        return Err(DriverError::Protocol("unexpected polling report id".into()));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: "unexpected polling report id".into(),
+            reference_url: None,
+        });
     }
     let value = read_uint_le(bytes, descriptor.offset, 2)? as u16;
     Ok(nearest(&descriptor.rates, value))
@@ -93,9 +117,11 @@ pub fn decode_polling(bytes: &[u8], descriptor: &PollingDescriptor) -> Result<u1
 
 pub fn decode_actuation(bytes: &[u8], descriptor: &akku_core::ActuationDescriptor) -> Result<f32> {
     if descriptor.report_id != 0 && bytes.first().copied() != Some(descriptor.report_id) {
-        return Err(DriverError::Protocol(
-            "unexpected actuation report id".into(),
-        ));
+        return Err(DriverError::Protocol {
+            backend_id: "decode".into(),
+            message: "unexpected actuation report id".into(),
+            reference_url: None,
+        });
     }
     let hundredths = read_uint_le(bytes, descriptor.offset, 2)? as f32;
     Ok((hundredths / 100.0).clamp(descriptor.min_mm, descriptor.max_mm))
@@ -108,14 +134,20 @@ pub fn encode_dpi(buffer: &mut [u8], descriptor: &DpiDescriptor, dpi: u16) -> Re
         .copied()
         .enumerate()
         .find(|(_, value)| *value == dpi)
-        .ok_or_else(|| DriverError::InvalidArgument(format!("{dpi} DPI is not supported")))?;
+        .ok_or_else(|| DriverError::InvalidArgument {
+            field: "dpi".into(),
+            reason: format!("{dpi} DPI is not supported"),
+        })?;
     buffer[0] = descriptor.report_id;
     match descriptor.encoding {
         DpiEncoding::IndexU8 => {
             *buffer
                 .get_mut(descriptor.offset)
-                .ok_or_else(|| DriverError::Protocol("DPI write offset is invalid".into()))? =
-                index as u8;
+                .ok_or_else(|| DriverError::Protocol {
+                    backend_id: "decode".into(),
+                    message: "DPI write offset is invalid".into(),
+                    reference_url: None,
+                })? = index as u8;
         }
         DpiEncoding::U16Le => write_uint_le(buffer, descriptor.offset, 2, u32::from(value))?,
     }
@@ -124,9 +156,10 @@ pub fn encode_dpi(buffer: &mut [u8], descriptor: &DpiDescriptor, dpi: u16) -> Re
 
 pub fn encode_polling(buffer: &mut [u8], descriptor: &PollingDescriptor, hz: u16) -> Result<()> {
     if !descriptor.rates.contains(&hz) {
-        return Err(DriverError::InvalidArgument(format!(
-            "{hz} Hz is not supported"
-        )));
+        return Err(DriverError::InvalidArgument {
+            field: "polling".into(),
+            reason: format!("{hz} Hz is not supported"),
+        });
     }
     buffer[0] = descriptor.report_id;
     write_uint_le(buffer, descriptor.offset, 2, u32::from(hz))
@@ -138,9 +171,10 @@ pub fn encode_actuation(
     millimetres: f32,
 ) -> Result<()> {
     if !millimetres.is_finite() {
-        return Err(DriverError::InvalidArgument(
-            "actuation must be finite".into(),
-        ));
+        return Err(DriverError::InvalidArgument {
+            field: "actuation".into(),
+            reason: "actuation must be finite".into(),
+        });
     }
     let bounded = millimetres.clamp(descriptor.min_mm, descriptor.max_mm);
     buffer[0] = descriptor.report_id;
